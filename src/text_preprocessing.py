@@ -22,6 +22,27 @@ try:
 except LookupError:
     nltk.download('wordnet')
 
+# Lazy-load SpaCy model to avoid OSError during Streamlit startup
+_nlp = None
+
+def get_nlp():
+    """
+    Lazy-load SpaCy model. This ensures the model is loaded only once
+    and prevents OSErrors on Streamlit Cloud deployment.
+    
+    Returns:
+        spacy.Language: The loaded SpaCy model
+    """
+    global _nlp
+    if _nlp is None:
+        try:
+            _nlp = spacy.load("en_core_web_sm")
+        except:
+            from spacy.cli import download
+            download("en_core_web_sm")
+            _nlp = spacy.load("en_core_web_sm")
+    return _nlp
+
 
 class TextPreprocessor:
     """
@@ -31,10 +52,13 @@ class TextPreprocessor:
     def __init__(self):
         """
         Initialize the TextPreprocessor with necessary NLP tools.
+        Uses lazy-loaded SpaCy model to avoid startup issues on Streamlit Cloud.
         """
         self.stop_words = set(stopwords.words('english'))
         self.lemmatizer = WordNetLemmatizer()
-        self.nlp = spacy.load('en_core_web_sm')
+        
+        # Use lazy-loaded SpaCy model
+        self.nlp = get_nlp()
 
     def clean_text(self, text: str) -> str:
         """
