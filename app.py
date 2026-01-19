@@ -425,15 +425,19 @@ def clear_user_results(email):
     finally:
         conn.close()
 
-# Initialize components
+# Initialize components - cached for performance
 @st.cache_resource
 def load_components():
     """Load and cache the main components."""
-    parser = ResumeParser()
-    preprocessor = TextPreprocessor()
-    engine = SimilarityEngine()
-    ranker = CandidateRanker()
-    return parser, preprocessor, engine, ranker
+    try:
+        parser = ResumeParser()
+        preprocessor = TextPreprocessor()
+        engine = SimilarityEngine()
+        ranker = CandidateRanker()
+        return parser, preprocessor, engine, ranker
+    except Exception as e:
+        st.error(f"Error loading components: {e}")
+        raise
 
 parser, preprocessor, engine, ranker = load_components()
 

@@ -37,10 +37,16 @@ def get_nlp():
     if _nlp is None:
         try:
             _nlp = spacy.load("en_core_web_sm")
-        except:
-            from spacy.cli import download
-            download("en_core_web_sm")
-            _nlp = spacy.load("en_core_web_sm")
+        except OSError:
+            # Model not found, try to download it
+            try:
+                from spacy.cli import download as spacy_download
+                spacy_download("en_core_web_sm")
+                _nlp = spacy.load("en_core_web_sm")
+            except Exception as e:
+                # If all else fails, print error and raise
+                print(f"Error loading SpaCy model: {e}")
+                raise RuntimeError(f"Failed to load SpaCy model: {e}. Make sure 'en_core_web_sm' is in requirements.txt")
     return _nlp
 
 
