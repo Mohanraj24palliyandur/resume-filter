@@ -1,0 +1,4 @@
+NAME: Mohanraj
+SKILLS: Python, NLP, Machine Learning
+EDUCATION: B.E Computer Science
+EXPERIENCE: Internship – Full Stack Developer

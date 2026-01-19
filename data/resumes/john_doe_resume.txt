@@ -1,0 +1,46 @@
+John Doe
+Senior Python Developer
+
+Professional Summary:
+Experienced Python developer with 6 years of expertise in machine learning, data science, and web development. Proven track record of delivering high-quality software solutions and leading development teams.
+
+Skills:
+- Python (6 years)
+- Machine Learning (TensorFlow, PyTorch, scikit-learn)
+- Web Development (Django, Flask, FastAPI)
+- Data Science (Pandas, NumPy, Matplotlib)
+- Cloud Platforms (AWS, GCP)
+- Databases (PostgreSQL, MongoDB)
+- Containerization (Docker, Kubernetes)
+- Version Control (Git)
+- CI/CD (Jenkins, GitLab CI)
+
+Professional Experience:
+
+Senior Python Developer | TechCorp Inc. | 2020 - Present
+- Led development of machine learning pipelines processing 1M+ data points daily
+- Built RESTful APIs using FastAPI serving 10k+ requests per hour
+- Implemented automated testing achieving 95% code coverage
+- Mentored junior developers and conducted code reviews
+
+Python Developer | DataTech Solutions | 2018 - 2020
+- Developed data science models improving prediction accuracy by 30%
+- Created web applications using Django and React
+- Optimized database queries reducing response time by 50%
+- Collaborated with cross-functional teams on product features
+
+Education:
+Master of Science in Computer Science
+University of Technology, 2018
+- GPA: 3.8/4.0
+- Thesis: Machine Learning Applications in Predictive Analytics
+
+Bachelor of Science in Computer Science
+State University, 2016
+- GPA: 3.7/4.0
+- Relevant Coursework: Algorithms, Data Structures, Statistics
+
+Certifications:
+- AWS Certified Solutions Architect
+- Google Cloud Professional Cloud Architect
+- TensorFlow Developer Certificate

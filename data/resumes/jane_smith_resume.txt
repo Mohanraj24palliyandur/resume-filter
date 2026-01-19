@@ -1,0 +1,46 @@
+Jane Smith
+Full Stack Developer
+
+Professional Summary:
+Versatile full stack developer with 4 years of experience in web development, JavaScript frameworks, and backend technologies. Passionate about creating user-friendly applications and solving complex problems.
+
+Skills:
+- JavaScript (4 years)
+- React.js, Node.js, Express.js
+- HTML5, CSS3, TypeScript
+- Python (2 years)
+- SQL Databases (MySQL, PostgreSQL)
+- Git, GitHub
+- RESTful APIs
+- Agile Development
+- UI/UX Design Principles
+
+Professional Experience:
+
+Full Stack Developer | WebSolutions Ltd. | 2021 - Present
+- Developed responsive web applications using React and Node.js
+- Built RESTful APIs handling 5k+ daily active users
+- Implemented user authentication and authorization systems
+- Optimized frontend performance improving load times by 40%
+
+Junior Developer | StartupTech | 2019 - 2021
+- Created dynamic web pages using HTML, CSS, and JavaScript
+- Developed backend services using Node.js and Express
+- Integrated third-party APIs and payment systems
+- Participated in agile development processes
+
+Education:
+Bachelor of Science in Software Engineering
+Tech University, 2019
+- GPA: 3.6/4.0
+- Capstone Project: E-commerce Platform with React and Node.js
+
+Certifications:
+- React Developer Certification
+- Node.js Certification
+- AWS Cloud Practitioner
+
+Projects:
+- Task Management App: Built with React, Node.js, and MongoDB
+- Weather Dashboard: Real-time weather app using APIs
+- Portfolio Website: Responsive design with modern CSS

@@ -1,0 +1,4 @@
+candidate_name,similarity_score,similarity_percentage,rank
+john_doe_resume.txt,0.31790969620300996,31.79,1
+test_resume.txt,0.1194797559235535,11.95,2
+jane_smith_resume.txt,0.08029887095679125,8.03,3
