@@ -1,60 +1,9 @@
 import re
-import nltk
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-from nltk.stem import WordNetLemmatizer
 from typing import List
 import spacy
 
 # Lazy-load SpaCy model to avoid OSError during Streamlit startup
 _nlp = None
-
-def get_nlp():
-    """
-    Lazy-load SpaCy model. This ensures the model is loaded only once
-    and prevents OSErrors on Streamlit Cloud deployment.
-    
-    Returns:
-        spacy.Language: The loaded SpaCy model
-    """
-    global _nlp
-    if _nlp is None:
-        try:
-            _nlp = spacy.load("en_core_web_sm")
-        except OSError:
-            # Model not found, try to download it
-            try:
-                from spacy.cli import download as spacy_download
-                spacy_download("en_core_web_sm")
-                _nlp = spacy.load("en_core_web_sm")
-            except Exception as e:
-                # If all else fails, print error and raise
-                print(f"Error loading SpaCy model: {e}")
-                raise RuntimeError(f"Failed to load SpaCy model: {e}. Make sure 'en_core_web_sm' is in requirements.txt")
-    return _nlp
-
-def ensure_nltk_data():
-    """
-    Ensure required NLTK data is downloaded. This prevents LookupError
-    during Streamlit Cloud deployment by downloading data lazily.
-    """
-    try:
-        nltk.data.find('tokenizers/punkt')
-    except LookupError:
-        print("Downloading NLTK punkt tokenizer...")
-        nltk.download('punkt', quiet=True)
-
-    try:
-        nltk.data.find('corpora/stopwords')
-    except LookupError:
-        print("Downloading NLTK stopwords...")
-        nltk.download('stopwords', quiet=True)
-
-    try:
-        nltk.data.find('corpora/wordnet')
-    except LookupError:
-        print("Downloading NLTK wordnet...")
-        nltk.download('wordnet', quiet=True)
 
 def get_nlp():
     """
@@ -89,16 +38,11 @@ class TextPreprocessor:
     def __init__(self):
         """
         Initialize the TextPreprocessor with necessary NLP tools.
-        Uses lazy-loaded SpaCy model and ensures NLTK data is available.
+        Uses SpaCy for all NLP tasks to avoid NLTK download issues on cloud platforms.
         """
-        # Ensure NLTK data is downloaded before using it
-        ensure_nltk_data()
-        
-        self.stop_words = set(stopwords.words('english'))
-        self.lemmatizer = WordNetLemmatizer()
-        
-        # Use lazy-loaded SpaCy model
+        # Use SpaCy for all NLP operations (more reliable on cloud platforms)
         self.nlp = get_nlp()
+        self.stop_words = self.nlp.Defaults.stop_words  # SpaCy's built-in stop words
 
     def clean_text(self, text: str) -> str:
         """
@@ -118,7 +62,7 @@ class TextPreprocessor:
 
     def tokenize_text(self, text: str) -> List[str]:
         """
-        Tokenize the text into words.
+        Tokenize the text into words using SpaCy (more reliable than NLTK on cloud platforms).
 
         Args:
             text (str): Input text to tokenize.
@@ -126,7 +70,8 @@ class TextPreprocessor:
         Returns:
             List[str]: List of tokens.
         """
-        return word_tokenize(text)
+        doc = self.nlp(text)
+        return [token.text for token in doc]
 
     def remove_stopwords(self, tokens: List[str]) -> List[str]:
         """
@@ -193,9 +138,20 @@ class TextPreprocessor:
             if token.pos_ in ['NOUN', 'PROPN'] and len(token.text) > 2:
                 skills.append(token.text.lower())
 
-        return list(set(skills))  # Remove duplicates
+    def lemmatize_tokens(self, tokens: List[str]) -> List[str]:
+        """
+        Lemmatize the tokens using SpaCy.
 
-    def extract_experience_years(self, text: str) -> int:
+        Args:
+            tokens (List[str]): List of tokens.
+
+        Returns:
+            List[str]: List of lemmatized tokens.
+        """
+        # Process the text with SpaCy to get lemmas
+        text = ' '.join(tokens)
+        doc = self.nlp(text)
+        return [token.lemma_ for token in doc]
         """
         Extract years of experience from text.
 
