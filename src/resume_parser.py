@@ -2,6 +2,17 @@ import fitz  # PyMuPDF
 import docx
 import os
 from typing import List, Dict
+from pyresparser import ResumeParser
+import pdfplumber
+from docx import Document
+import re
+
+
+SKILLS = [
+    "python", "java", "nlp", "machine learning", "deep learning",
+    "pandas", "numpy", "sql", "flask", "django", "streamlit",
+    "javascript", "react", "html", "css", "tensorflow", "pytorch"
+]
 
 
 class ResumeParser:
@@ -95,6 +106,70 @@ class ResumeParser:
                     print(f"Error parsing resume {filename}: {e}")
 
         return resumes
+
+    def parse(self, file_path):
+        # Extract full_text
+        if file_path.lower().endswith('.pdf'):
+            with pdfplumber.open(file_path) as pdf:
+                full_text = " ".join(page.extract_text() or '' for page in pdf.pages).strip()
+        elif file_path.lower().endswith('.docx'):
+            doc = Document(file_path)
+            full_text = " ".join(para.text for para in doc.paragraphs).strip()
+        else:
+            full_text = ''
+        
+        # Extract using heuristics
+        name = self.extract_name(full_text)
+        experience_years = self.extract_experience_years(full_text)
+        skills = self.extract_skills(full_text)
+        
+        # Try pyresparser for overrides
+        try:
+            data = ResumeParser(file_path).get_extracted_data()
+            if data.get('name') and data['name'] != 'Not extracted':
+                name = data['name']
+            if data.get('total_experience'):
+                experience_years = data['total_experience']
+            if data.get('skills'):
+                skills = data['skills']
+        except:
+            pass
+        
+        return {
+            'full_text': full_text,
+            'name': name,
+            'email': '',
+            'skills': skills,
+            'experience_years': experience_years
+        }
+
+    def extract_name(self, text: str) -> str:
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        if not lines:
+            return "Not extracted"
+        first_line = lines[0]
+        if "@" in first_line or any(char.isdigit() for char in first_line):
+            return "Not extracted"
+        if len(first_line.split()) <= 4:
+            return first_line.title()
+        return "Not extracted"
+
+    def extract_experience_years(self, text: str) -> int:
+        patterns = [
+            r'(\d+)\+?\s+years?',
+            r'(\d+)\s+yrs',
+            r'experience:?\s*(\d+)\s+years?'
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, text, re.IGNORECASE)
+            if match:
+                return int(match.group(1))
+        return 0
+
+    def extract_skills(self, text: str) -> list:
+        text_lower = text.lower()
+        found = [skill for skill in SKILLS if skill in text_lower]
+        return found[:5]
 
 
 if __name__ == "__main__":

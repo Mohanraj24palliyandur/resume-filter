@@ -500,7 +500,7 @@ def main():
     job_description = st.text_area(
         "Enter the job description:",
         height=200,
-        placeholder="Paste your job description here...",
+        placeholder="Enter a detailed job description (at least 10 words) including skills, role, and experience. Example: Python developer with experience in NLP, machine learning, pandas, and data analysis.",
         key="job_desc"
     )
     st.markdown('</div>', unsafe_allow_html=True)
@@ -517,8 +517,8 @@ def main():
 
     # Analysis button
     if st.button("🚀 Analyze Resumes", type="primary"):
-        if not job_description.strip():
-            st.error("Please enter a job description.")
+        if len(job_description.split()) < 10:
+            st.error("Please enter a detailed job description with at least 10 words, including skills, role, and experience.")
             return
 
         if not uploaded_files:
@@ -526,12 +526,10 @@ def main():
             return
 
         with st.spinner("Processing resumes..."):
-            # Process job description
-            processed_job = preprocessor.preprocess_text(job_description)
-
             # Process resumes
             resume_texts = {}
             resume_names = []
+            candidate_details = {}
 
             for uploaded_file in uploaded_files:
                 # Save uploaded file temporarily
@@ -540,16 +538,10 @@ def main():
                     f.write(uploaded_file.getvalue())
 
                 try:
-                    # Extract text based on file type
-                    if uploaded_file.name.lower().endswith('.pdf'):
-                        text = parser.extract_text_from_pdf(file_path)
-                    elif uploaded_file.name.lower().endswith('.docx'):
-                        text = parser.extract_text_from_docx(file_path)
-                    else:
-                        continue
-
-                    processed_text = preprocessor.preprocess_text(text)
-                    resume_texts[uploaded_file.name] = processed_text
+                    # Parse resume using new parser
+                    parsed = parser.parse(file_path)
+                    resume_texts[uploaded_file.name] = parsed['full_text']
+                    candidate_details[uploaded_file.name] = parsed
                     resume_names.append(uploaded_file.name)
 
                 except Exception as e:
@@ -563,6 +555,13 @@ def main():
                 st.error("No resumes could be processed.")
                 return
 
+            # Process job description
+            processed_job = preprocessor.preprocess_text(job_description)
+
+            # Preprocess resume texts
+            for name, text in resume_texts.items():
+                resume_texts[name] = preprocessor.preprocess_text(text)
+
             # Compute similarities
             all_texts = [processed_job] + list(resume_texts.values())
             tfidf_matrix = engine.fit_transform(all_texts)
@@ -572,11 +571,19 @@ def main():
 
             similarities = engine.compute_similarity(job_vector, resume_vectors)
 
-            # Create similarity tuples
-            similarity_tuples = list(zip(resume_names, similarities))
+            keyword_scores = [engine.compute_keyword_similarity(processed_job, resume_texts[name]) for name in resume_names]
+            final_similarities = [0.7 * nlp + 0.3 * kw for nlp, kw in zip(similarities, keyword_scores)]
+
+            # Update similarity_tuples
+            similarity_tuples = list(zip(resume_names, final_similarities))
 
             # Rank candidates
             ranked_df = ranker.rank_candidates(similarity_tuples)
+
+            # Enhance ranked_df
+            ranked_df['Display Name'] = ranked_df['candidate_name'].map(lambda x: candidate_details.get(x, {}).get('name', 'N/A'))
+            ranked_df['Experience Years'] = ranked_df['candidate_name'].map(lambda x: candidate_details.get(x, {}).get('experience_years', 0))
+            ranked_df['Top Skills'] = ranked_df['candidate_name'].map(lambda x: ", ".join(candidate_details.get(x, {}).get('skills', [])[:5]) or 'N/A')
 
             # Save results to database
             for _, row in ranked_df.iterrows():
@@ -632,7 +639,7 @@ def main():
             # Results table
             st.subheader("🏆 Ranked Candidates")
             st.dataframe(
-                ranked_df[['rank', 'candidate_name', 'similarity_percentage']],
+                ranked_df[['rank', 'Display Name', 'candidate_name', 'similarity_percentage', 'Experience Years', 'Top Skills']],
                 width='stretch'
             )
 
@@ -685,6 +692,38 @@ def main():
             )
             st.markdown('</div>', unsafe_allow_html=True)  # Close download card
 
+            # Extract JD skills
+            jd_skills = engine.extract_skills(processed_job)
+
+            # Filter selected/rejected
+            SELECT_THRESHOLD = 70
+            selected_df = ranked_df[ranked_df['similarity_percentage'] >= SELECT_THRESHOLD]
+            rejected_df = ranked_df[ranked_df['similarity_percentage'] < SELECT_THRESHOLD]
+
+            # Display selected
+            st.success("✅ Selected Candidates (Score ≥ 70%)")
+            st.dataframe(selected_df[['rank', 'Display Name', 'candidate_name', 'similarity_percentage', 'Experience Years', 'Top Skills']], width='stretch')
+
+            # Display rejected with feedback
+            st.error("❌ Rejected Candidates (Below 70%)")
+
+            for _, row in rejected_df.iterrows():
+                candidate_name = row['candidate_name']
+                score = row['similarity_percentage']
+                candidate_skills = candidate_details[candidate_name]['skills']
+                missing_skills = set(jd_skills) - set(candidate_skills)
+                
+                reasons = engine.rejection_reasons(jd_skills, candidate_skills, score)
+                suggestions = engine.improvement_suggestions(missing_skills)
+                
+                st.markdown(f"### {candidate_name}")
+                st.markdown(generate_rejection_message(
+                    candidate_name,
+                    score,
+                    reasons,
+                    suggestions
+                ))
+
     # # Previous results section
     # st.header("📚 Your Previous Results")
     user_results = get_user_results(st.session_state.user_email)
@@ -712,6 +751,203 @@ def main():
         st.markdown('</div>', unsafe_allow_html=True)
     else:
         st.info("No previous results found. Upload and analyze some resumes to see your history here!")
+
+def generate_rejection_message(name, score, reasons, suggestions):
+    return f"""
+Hello {name},
+
+Thank you for applying.
+
+After reviewing your resume, your profile scored {score:.2f}%,
+which is below our current shortlisting threshold.
+
+Reasons:
+- {'; '.join(reasons)}
+
+Suggestions to improve:
+- {'; '.join(suggestions)}
+
+We encourage you to update your profile and apply again.
+
+Best regards,
+AI Recruitment System
+"""
+
+def resume_improvement_score(match_score, missing_skills_count):
+    score = match_score
+    penalty = missing_skills_count * 5
+    return max(30, int(score - penalty))
+
+COURSES = {
+    "python": "Python for Everybody – Coursera (Free)",
+    "nlp": "NLP with Python – YouTube (freeCodeCamp)",
+    "sql": "SQL Basics – Khan Academy",
+    "machine learning": "ML Crash Course – Google",
+    "pandas": "Data Analysis with Pandas – Kaggle"
+}
+
+def resume_rewrite_suggestions(missing_skills, experience_years):
+    suggestions = []
+
+    for skill in list(missing_skills)[:3]:
+        suggestions.append(
+            f"Add a project demonstrating **{skill}** with tools and outcomes"
+        )
+
+    if experience_years == 0:
+        suggestions.append(
+            "Add internship, academic, or project-based experience with dates"
+        )
+
+    suggestions.append(
+        "Rewrite bullet points using: *Action verb + Tool + Impact (numbers)*"
+    )
+
+    return suggestions
+
+def student_dashboard():
+    """Student dashboard for viewing rejection feedback"""
+    
+    # Student Login
+    if "student_email" not in st.session_state:
+        st.sidebar.title("🔐 Student Login")
+        email = st.sidebar.text_input("Enter your email")
+        if st.sidebar.button("Login"):
+            if "@" in email:
+                st.session_state["student_email"] = email
+                st.success("Logged in successfully")
+                st.rerun()
+            else:
+                st.error("Enter a valid email")
+        st.warning("Please login to view your dashboard")
+        return
+    
+    st.title("🎓 Student Dashboard")
+    
+    # Assume student data is available (e.g., from session or demo)
+    # For demo purposes, use sample rejected data
+    # In real app, this would come from database based on logged-in student
+    
+    # Sample data - replace with actual student data retrieval
+    student_data = {
+        'name': 'John Doe',
+        'similarity_percentage': 65.5,
+        'reasons': ['Missing key skills: NLP, SQL', 'Resume did not meet relevance threshold (70%)'],
+        'skills': ['Python', 'Data Analysis'],  # Candidate's skills
+        'experience_years': 0,  # Add experience years
+        'courses': ['Python for Data Science', 'NLP Fundamentals']  # This can be dynamic
+    }
+    
+    # Hardcoded JD skills for demo
+    jd_skills = ['Python', 'NLP', 'Machine Learning', 'SQL']
+    
+    jd_skills_set = set(jd_skills)
+    candidate_skills_set = set(student_data['skills'])
+    
+    matched = jd_skills_set & candidate_skills_set
+    missing = jd_skills_set - candidate_skills_set
+    
+    # Overall Status
+    st.error("❌ Application Status: Not Selected")
+    
+    # Resume Match Score
+    st.metric(
+        label="Resume Match Score",
+        value=f"{student_data['similarity_percentage']}%"
+    )
+    
+    # Why You Were Rejected
+    st.subheader("📌 Why you were rejected")
+    for reason in student_data['reasons']:
+        st.write(f"- {reason}")
+    
+    # Skill Gap Analysis (Chart)
+    skill_df = pd.DataFrame({
+        "Category": ["Matched Skills", "Missing Skills"],
+        "Count": [len(matched), len(missing)]
+    })
+    
+    st.subheader("🧠 Skill Gap Analysis")
+    st.bar_chart(skill_df.set_index("Category"))
+    
+    # Resume Improvement Score
+    improvement_score = resume_improvement_score(
+        student_data['similarity_percentage'],
+        len(missing)
+    )
+    
+    st.subheader("📊 Resume Improvement Score")
+    st.progress(improvement_score / 100)
+    st.write(f"Score: {improvement_score}/100")
+    
+    # Before vs After Resume Score
+    before = student_data['similarity_percentage']
+    after = improved_score(before, len(missing))
+    
+    score_df = pd.DataFrame({
+        "Stage": ["Before", "After"],
+        "Score": [before, after]
+    })
+    
+    st.subheader("📈 Resume Score Improvement")
+    st.bar_chart(score_df.set_index("Stage"))
+    
+    # Resume Rewrite Suggestions
+    st.subheader("📄 Resume Rewrite Suggestions")
+    for s in resume_rewrite_suggestions(missing, student_data['experience_years']):
+        st.markdown(f"- {s}")
+    
+    # Course Recommendations
+    st.subheader("🎓 Recommended Courses")
+    
+    for skill in list(missing)[:3]:
+        skill_lower = skill.lower()
+        if skill_lower in COURSES:
+            st.write(f"🔹 {skill.title()}: {COURSES[skill_lower]}")
+    
+    # Chatbot
+    st.subheader("🤖 Career Assistant")
+    question = st.text_input("Ask: How can I improve my resume?")
+    if question:
+        if "skill" in question.lower():
+            st.write(f"You should focus on learning: {', '.join(list(missing)[:3])}")
+        elif "score" in question.lower():
+            st.write("Improve skills match and add quantified achievements.")
+        elif "project" in question.lower():
+            st.write("Add 2–3 real-world projects aligned with the job description.")
+        else:
+            st.write("Focus on skills, experience, and resume clarity.")
+    
+    # Email Preview
+    st.subheader("📧 Rejection Email Preview")
+    
+    email_text = f"""
+Dear {student_data['name']},
+
+Thank you for applying.
+
+Your resume scored {student_data['similarity_percentage']}%, which is below
+our shortlisting threshold of 70%.
+
+Key improvement areas:
+- {', '.join(list(missing)[:3])}
+
+We recommend improving your resume and reapplying.
+
+Best regards,
+AI Recruitment System
+"""
+    
+    st.text_area("Email Content", email_text, height=200, disabled=True)
+
+# In the main function, add a way to access student dashboard
+# For example, in sidebar or as a separate page
+
+# Example integration in main():
+# In the sidebar, add:
+# if st.sidebar.button("🎓 Student Dashboard"):
+#     student_dashboard()
+#     return
 
 if __name__ == "__main__":
     main()

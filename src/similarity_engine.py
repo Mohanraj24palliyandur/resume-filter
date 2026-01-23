@@ -1,72 +1,92 @@
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+from sentence_transformers import SentenceTransformer, util
 import numpy as np
 from typing import List, Dict, Tuple
+import torch
+
+
+SKILLS_LIST = [
+    "python", "java", "nlp", "machine learning", "deep learning",
+    "pandas", "numpy", "sql", "flask", "django", "streamlit",
+    "javascript", "react", "html", "css", "tensorflow", "pytorch"
+]
 
 
 class SimilarityEngine:
     """
-    A class to compute similarity between job descriptions and resumes using TF-IDF and cosine similarity.
+    A class to compute similarity between job descriptions and resumes using Sentence Transformers.
     """
 
     def __init__(self):
         """
-        Initialize the SimilarityEngine with TF-IDF vectorizer.
+        Initialize the SimilarityEngine with a pre-trained Sentence Transformer model.
         """
-        self.vectorizer = TfidfVectorizer(
-            max_features=5000,
-            stop_words='english',
-            ngram_range=(1, 2)  # Include unigrams and bigrams
-        )
-        self.tfidf_matrix = None
-        self.feature_names = None
+        self.model = SentenceTransformer('all-MiniLM-L6-v2')
 
-    def fit_transform(self, documents: List[str]) -> np.ndarray:
+    def fit_transform(self, texts: List[str]):
         """
-        Fit the TF-IDF vectorizer on the documents and transform them.
+        Encode the documents (resumes + job description) using the Sentence Transformer model.
 
         Args:
-            documents (List[str]): List of documents (resumes + job description).
+            texts (List[str]): List of documents (resumes + job description).
 
         Returns:
-            np.ndarray: TF-IDF matrix.
+            Tensor: Encoded document vectors.
         """
-        self.tfidf_matrix = self.vectorizer.fit_transform(documents)
-        self.feature_names = self.vectorizer.get_feature_names_out()
-        return self.tfidf_matrix
+        return self.model.encode(texts, convert_to_tensor=True)
 
-    def transform(self, documents: List[str]) -> np.ndarray:
+    def transform(self, texts: List[str]):
         """
-        Transform new documents using the fitted vectorizer.
+        Transform new documents using the fitted model.
 
         Args:
-            documents (List[str]): List of documents to transform.
+            texts (List[str]): List of documents to transform.
 
         Returns:
-            np.ndarray: TF-IDF matrix for the new documents.
+            Tensor: Encoded document vectors for the new documents.
         """
-        return self.vectorizer.transform(documents)
+        return self.model.encode(texts, convert_to_tensor=True)
 
-    def compute_similarity(self, job_vector: np.ndarray, resume_vectors: np.ndarray) -> np.ndarray:
+    def compute_similarity(self, job_vector, resume_vectors):
         """
         Compute cosine similarity between job description and resumes.
 
         Args:
-            job_vector (np.ndarray): TF-IDF vector for job description.
-            resume_vectors (np.ndarray): TF-IDF vectors for resumes.
+            job_vector: Encoded vector for job description.
+            resume_vectors: Encoded vectors for resumes.
 
         Returns:
-            np.ndarray: Similarity scores.
+            List[float]: Similarity scores.
         """
-        similarities = cosine_similarity(job_vector, resume_vectors)
-        return similarities.flatten()
+        similarities = []
+        job_vec = job_vector.squeeze(0)  # Remove batch dim
+        for resume_vec in resume_vectors:
+            sim = torch.nn.functional.cosine_similarity(job_vec, resume_vec, dim=0)
+            similarities.append(sim.item())  # Return 0-1, remove *100
+        return similarities
 
-    def get_top_similar_documents(self, similarities: np.ndarray, document_names: List[str], top_n: int = 10) -> List[Tuple[str, float]]:
+    def compute_keyword_similarity(self, job_text, resume_text):
+        """
+        Compute keyword-based similarity between job description and resume.
+
+        Args:
+            job_text: Job description text.
+            resume_text: Resume text.
+
+        Returns:
+            float: Keyword similarity score.
+        """
+        jd_words = set(job_text.lower().split())
+        resume_words = set(resume_text.lower().split())
+        if not jd_words:
+            return 0.0
+        return len(jd_words & resume_words) / len(jd_words)  # Return 0-1, remove *100
+
+    def get_top_similar_documents(self, similarities, document_names: List[str], top_n: int = 10) -> List[Tuple[str, float]]:
         """
         Get top N most similar documents.
 
         Args:
-            similarities (np.ndarray): Similarity scores.
+            similarities (List[float]): Similarity scores.
             document_names (List[str]): Names of the documents.
             top_n (int): Number of top documents to return.
 
@@ -85,41 +105,36 @@ class SimilarityEngine:
 
     def get_similarity_explanation(self, job_text: str, resume_text: str, top_features: int = 10) -> Dict:
         """
-        Provide explanation for similarity by showing common important terms.
-
-        Args:
-            job_text (str): Job description text.
-            resume_text (str): Resume text.
-            top_features (int): Number of top features to show.
-
-        Returns:
-            Dict: Explanation with common terms and their importance.
+        Provide a simplified explanation for similarity (semantic matching doesn't have TF-IDF features).
         """
-        # Transform individual texts
-        job_vector = self.transform([job_text]).toarray()[0]
-        resume_vector = self.transform([resume_text]).toarray()[0]
-
-        # Find common non-zero features
-        common_indices = np.where((job_vector > 0) & (resume_vector > 0))[0]
-
-        # Get feature importance (TF-IDF scores)
-        common_features = []
-        for idx in common_indices:
-            feature_name = self.feature_names[idx]
-            job_score = job_vector[idx]
-            resume_score = resume_vector[idx]
-            avg_score = (job_score + resume_score) / 2
-            common_features.append((feature_name, avg_score))
-
-        # Sort by importance
-        common_features.sort(key=lambda x: x[1], reverse=True)
-
         return {
-            'common_terms': common_features[:top_features],
-            'total_common_terms': len(common_features),
-            'job_unique_terms': len(np.where((job_vector > 0) & (resume_vector == 0))[0]),
-            'resume_unique_terms': len(np.where((job_vector == 0) & (resume_vector > 0))[0])
+            'common_terms': [],
+            'total_common_terms': 0,
+            'job_unique_terms': 0,
+            'resume_unique_terms': 0
         }
+
+    def extract_skills(self, text: str) -> list:
+        text_lower = text.lower()
+        found = [skill for skill in SKILLS_LIST if skill in text_lower]
+        return found
+
+    def rejection_reasons(self, jd_skills, candidate_skills, score):
+        reasons = []
+        missing = set(jd_skills) - set(candidate_skills)
+        if missing:
+            reasons.append(f"Missing key skills: {', '.join(missing)}")
+        if score < 0.5:
+            reasons.append("Overall similarity score is below threshold.")
+        return reasons
+
+    def improvement_suggestions(self, missing_skills):
+        suggestions = []
+        for skill in list(missing_skills)[:3]:
+            suggestions.append(f"Learn and add projects in {skill}")
+        suggestions.append("Add measurable achievements (numbers, impact)")
+        suggestions.append("Tailor resume keywords to job description")
+        return suggestions
 
 
 if __name__ == "__main__":
@@ -136,11 +151,11 @@ if __name__ == "__main__":
 
     # Fit and transform
     all_docs = [job_desc] + resumes
-    tfidf_matrix = engine.fit_transform(all_docs)
+    document_vectors = engine.fit_transform(all_docs)
 
     # Compute similarities
-    job_vector = tfidf_matrix[0:1]  # First document is job description
-    resume_vectors = tfidf_matrix[1:]  # Rest are resumes
+    job_vector = document_vectors[0:1]  # First document is job description
+    resume_vectors = document_vectors[1:]  # Rest are resumes
 
     similarities = engine.compute_similarity(job_vector, resume_vectors)
 

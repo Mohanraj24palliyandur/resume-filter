@@ -97,6 +97,22 @@ class TextPreprocessor:
         """
         return [self.lemmatizer.lemmatize(token) for token in tokens]
 
+    def clean_names(self, text):
+        """
+        Remove common names from the text to reduce noise in NLP tasks.
+
+        Args:
+            text (str): Input text.
+
+        Returns:
+            str: Text with names removed.
+        """
+        names = ['mohan', 'ravi', 'kumar', 'john', 'jane', 'doe', 'smith', 'alex', 'emma', 'liam']  # Expand as needed
+        text = text.lower()
+        for name in names:
+            text = re.sub(r'\b' + re.escape(name) + r'\b', '', text, flags=re.IGNORECASE)
+        return text
+
     def preprocess_text(self, text: str) -> str:
         """
         Complete preprocessing pipeline: clean, tokenize, remove stopwords, lemmatize.
