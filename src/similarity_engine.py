@@ -149,8 +149,17 @@ class SimilarityEngine:
             job_unique_count = sum(1 for score in job_scores if score > 0) - len(common_terms_with_scores)
             resume_unique_count = sum(1 for score in resume_scores if score > 0) - len(common_terms_with_scores)
 
+            # Ensure common_terms is always a list of tuples
+            safe_common_terms = []
+            for item in common_terms_with_scores[:top_features]:
+                if isinstance(item, tuple) and len(item) == 2:
+                    safe_common_terms.append((str(item[0]), float(item[1])))
+                else:
+                    # Skip invalid items
+                    continue
+
             return {
-                'common_terms': common_terms_with_scores[:top_features],
+                'common_terms': safe_common_terms,
                 'total_common_terms': len(common_terms_with_scores),
                 'job_unique_terms': max(0, job_unique_count),
                 'resume_unique_terms': max(0, resume_unique_count)
@@ -159,7 +168,7 @@ class SimilarityEngine:
             # If anything goes wrong, return safe defaults
             print(f"Error in get_similarity_explanation: {e}")
             return {
-                'common_terms': [],
+                'common_terms': [],  # Always return empty list
                 'total_common_terms': 0,
                 'job_unique_terms': 0,
                 'resume_unique_terms': 0
