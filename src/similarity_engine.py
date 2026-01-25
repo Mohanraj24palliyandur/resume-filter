@@ -112,48 +112,58 @@ class SimilarityEngine:
         """
         Provide explanation for TF-IDF similarity based on important terms and their scores.
         """
-        if not self.is_fitted:
+        try:
+            if not self.is_fitted:
+                return {
+                    'common_terms': [],
+                    'total_common_terms': 0,
+                    'job_unique_terms': 0,
+                    'resume_unique_terms': 0
+                }
+
+            # Transform both texts
+            texts = [job_text, resume_text]
+            tfidf_matrix = self.vectorizer.transform(texts)
+
+            # Get feature names
+            feature_names = self.vectorizer.get_feature_names_out()
+
+            # Get TF-IDF scores for job and resume
+            job_scores = tfidf_matrix[0].toarray().flatten()
+            resume_scores = tfidf_matrix[1].toarray().flatten()
+
+            # Find common terms (terms that appear in both with some score)
+            common_terms_with_scores = []
+            for i, term in enumerate(feature_names):
+                job_score = job_scores[i]
+                resume_score = resume_scores[i]
+                if job_score > 0 and resume_score > 0:
+                    # Use the minimum score as the importance (how well they match)
+                    importance = float(min(job_score, resume_score))
+                    common_terms_with_scores.append((term, importance))
+
+            # Sort by importance (descending)
+            common_terms_with_scores.sort(key=lambda x: x[1], reverse=True)
+
+            # Get unique terms counts
+            job_unique_count = sum(1 for score in job_scores if score > 0) - len(common_terms_with_scores)
+            resume_unique_count = sum(1 for score in resume_scores if score > 0) - len(common_terms_with_scores)
+
+            return {
+                'common_terms': common_terms_with_scores[:top_features],
+                'total_common_terms': len(common_terms_with_scores),
+                'job_unique_terms': max(0, job_unique_count),
+                'resume_unique_terms': max(0, resume_unique_count)
+            }
+        except Exception as e:
+            # If anything goes wrong, return safe defaults
+            print(f"Error in get_similarity_explanation: {e}")
             return {
                 'common_terms': [],
                 'total_common_terms': 0,
                 'job_unique_terms': 0,
                 'resume_unique_terms': 0
             }
-
-        # Transform both texts
-        texts = [job_text, resume_text]
-        tfidf_matrix = self.vectorizer.transform(texts)
-
-        # Get feature names
-        feature_names = self.vectorizer.get_feature_names_out()
-
-        # Get TF-IDF scores for job and resume
-        job_scores = tfidf_matrix[0].toarray().flatten()
-        resume_scores = tfidf_matrix[1].toarray().flatten()
-
-        # Find common terms (terms that appear in both with some score)
-        common_terms_with_scores = []
-        for i, term in enumerate(feature_names):
-            job_score = job_scores[i]
-            resume_score = resume_scores[i]
-            if job_score > 0 and resume_score > 0:
-                # Use the minimum score as the importance (how well they match)
-                importance = float(min(job_score, resume_score))
-                common_terms_with_scores.append((term, importance))
-
-        # Sort by importance (descending)
-        common_terms_with_scores.sort(key=lambda x: x[1], reverse=True)
-
-        # Get unique terms counts
-        job_unique_count = sum(1 for score in job_scores if score > 0) - len(common_terms_with_scores)
-        resume_unique_count = sum(1 for score in resume_scores if score > 0) - len(common_terms_with_scores)
-
-        return {
-            'common_terms': common_terms_with_scores[:top_features],
-            'total_common_terms': len(common_terms_with_scores),
-            'job_unique_terms': max(0, job_unique_count),
-            'resume_unique_terms': max(0, resume_unique_count)
-        }
 
     def extract_skills(self, text: str) -> list:
         text_lower = text.lower()
