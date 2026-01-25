@@ -2,8 +2,6 @@ import fitz  # PyMuPDF
 import docx
 import os
 from typing import List, Dict
-from pyresparser import ResumeParser
-import pdfplumber
 from docx import Document
 import re
 
@@ -108,32 +106,13 @@ class ResumeParser:
         return resumes
 
     def parse(self, file_path):
-        # Extract full_text
-        if file_path.lower().endswith('.pdf'):
-            with pdfplumber.open(file_path) as pdf:
-                full_text = " ".join(page.extract_text() or '' for page in pdf.pages).strip()
-        elif file_path.lower().endswith('.docx'):
-            doc = Document(file_path)
-            full_text = " ".join(para.text for para in doc.paragraphs).strip()
-        else:
-            full_text = ''
+        # Extract full_text using existing methods
+        full_text = self.parse_resume(file_path)
         
         # Extract using heuristics
         name = self.extract_name(full_text)
         experience_years = self.extract_experience_years(full_text)
         skills = self.extract_skills(full_text)
-        
-        # Try pyresparser for overrides
-        try:
-            data = ResumeParser(file_path).get_extracted_data()
-            if data.get('name') and data['name'] != 'Not extracted':
-                name = data['name']
-            if data.get('total_experience'):
-                experience_years = data['total_experience']
-            if data.get('skills'):
-                skills = data['skills']
-        except:
-            pass
         
         return {
             'full_text': full_text,
