@@ -667,8 +667,16 @@ def main():
                     with col1:
                         st.subheader("Common Skills/Terms")
                         if explanation['common_terms']:
-                            for term, score in explanation['common_terms'][:10]:
-                                st.write(f"• {term} (importance: {score:.3f})")
+                            try:
+                                for item in explanation['common_terms'][:10]:
+                                    if isinstance(item, tuple) and len(item) == 2:
+                                        term, score = item
+                                        st.write(f"• {term} (importance: {score:.3f})")
+                                    else:
+                                        # Skip invalid items
+                                        continue
+                            except Exception as e:
+                                st.write(f"Error displaying terms: {e}")
                         else:
                             st.write("No common terms found.")
 
@@ -882,7 +890,7 @@ def student_dashboard():
     
     # Before vs After Resume Score
     before = student_data['similarity_percentage']
-    after = improved_score(before, len(missing))
+    after = resume_improvement_score(before, len(missing))
     
     score_df = pd.DataFrame({
         "Stage": ["Before", "After"],

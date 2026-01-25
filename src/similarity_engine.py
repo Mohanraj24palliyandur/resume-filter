@@ -113,7 +113,17 @@ class SimilarityEngine:
         Provide explanation for TF-IDF similarity based on important terms and their scores.
         """
         try:
-            if not self.is_fitted:
+            if not hasattr(self, 'is_fitted') or not self.is_fitted:
+                print("DEBUG: Vectorizer not fitted")
+                return {
+                    'common_terms': [],
+                    'total_common_terms': 0,
+                    'job_unique_terms': 0,
+                    'resume_unique_terms': 0
+                }
+
+            if not hasattr(self, 'vectorizer') or self.vectorizer is None:
+                print("DEBUG: Vectorizer is None")
                 return {
                     'common_terms': [],
                     'total_common_terms': 0,
