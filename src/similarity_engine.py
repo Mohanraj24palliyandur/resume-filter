@@ -1,7 +1,7 @@
-from sentence_transformers import SentenceTransformer, util
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import numpy as np
 from typing import List, Dict, Tuple
-import torch
 
 
 SKILLS_LIST = [
@@ -13,56 +13,61 @@ SKILLS_LIST = [
 
 class SimilarityEngine:
     """
-    A class to compute similarity between job descriptions and resumes using Sentence Transformers.
+    A class to compute similarity between job descriptions and resumes using TF-IDF and cosine similarity.
     """
 
     def __init__(self):
         """
-        Initialize the SimilarityEngine with a pre-trained Sentence Transformer model.
+        Initialize the SimilarityEngine with TF-IDF vectorizer.
         """
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.vectorizer = TfidfVectorizer(
+            max_features=5000,
+            stop_words='english',
+            ngram_range=(1, 2)
+        )
+        self.is_fitted = False
 
     def fit_transform(self, texts: List[str]):
         """
-        Encode the documents (resumes + job description) using the Sentence Transformer model.
+        Fit the TF-IDF vectorizer and transform the documents.
 
         Args:
             texts (List[str]): List of documents (resumes + job description).
 
         Returns:
-            Tensor: Encoded document vectors.
+            np.ndarray: TF-IDF matrix.
         """
-        return self.model.encode(texts, convert_to_tensor=True)
+        tfidf_matrix = self.vectorizer.fit_transform(texts)
+        self.is_fitted = True
+        return tfidf_matrix
 
     def transform(self, texts: List[str]):
         """
-        Transform new documents using the fitted model.
+        Transform new documents using the fitted vectorizer.
 
         Args:
             texts (List[str]): List of documents to transform.
 
         Returns:
-            Tensor: Encoded document vectors for the new documents.
+            np.ndarray: TF-IDF matrix for the new documents.
         """
-        return self.model.encode(texts, convert_to_tensor=True)
+        if not self.is_fitted:
+            raise ValueError("Vectorizer must be fitted before transform. Call fit_transform first.")
+        return self.vectorizer.transform(texts)
 
     def compute_similarity(self, job_vector, resume_vectors):
         """
         Compute cosine similarity between job description and resumes.
 
         Args:
-            job_vector: Encoded vector for job description.
-            resume_vectors: Encoded vectors for resumes.
+            job_vector: TF-IDF vector for job description.
+            resume_vectors: TF-IDF vectors for resumes.
 
         Returns:
-            List[float]: Similarity scores.
+            List[float]: Similarity scores (0-1).
         """
-        similarities = []
-        job_vec = job_vector.squeeze(0)  # Remove batch dim
-        for resume_vec in resume_vectors:
-            sim = torch.nn.functional.cosine_similarity(job_vec, resume_vec, dim=0)
-            similarities.append(sim.item())  # Return 0-1, remove *100
-        return similarities
+        similarities = cosine_similarity(job_vector, resume_vectors)[0]
+        return similarities.tolist()
 
     def compute_keyword_similarity(self, job_text, resume_text):
         """
@@ -73,13 +78,13 @@ class SimilarityEngine:
             resume_text: Resume text.
 
         Returns:
-            float: Keyword similarity score.
+            float: Keyword similarity score (0-1).
         """
         jd_words = set(job_text.lower().split())
         resume_words = set(resume_text.lower().split())
         if not jd_words:
             return 0.0
-        return len(jd_words & resume_words) / len(jd_words)  # Return 0-1, remove *100
+        return len(jd_words & resume_words) / len(jd_words)
 
     def get_top_similar_documents(self, similarities, document_names: List[str], top_n: int = 10) -> List[Tuple[str, float]]:
         """
@@ -105,13 +110,20 @@ class SimilarityEngine:
 
     def get_similarity_explanation(self, job_text: str, resume_text: str, top_features: int = 10) -> Dict:
         """
-        Provide a simplified explanation for similarity (semantic matching doesn't have TF-IDF features).
+        Provide explanation for TF-IDF similarity based on common terms.
         """
+        job_words = set(job_text.lower().split())
+        resume_words = set(resume_text.lower().split())
+
+        common_terms = list(job_words & resume_words)
+        job_unique = list(job_words - resume_words)
+        resume_unique = list(resume_words - job_words)
+
         return {
-            'common_terms': [],
-            'total_common_terms': 0,
-            'job_unique_terms': 0,
-            'resume_unique_terms': 0
+            'common_terms': common_terms[:top_features],
+            'total_common_terms': len(common_terms),
+            'job_unique_terms': len(job_unique),
+            'resume_unique_terms': len(resume_unique)
         }
 
     def extract_skills(self, text: str) -> list:
@@ -151,11 +163,11 @@ if __name__ == "__main__":
 
     # Fit and transform
     all_docs = [job_desc] + resumes
-    document_vectors = engine.fit_transform(all_docs)
+    tfidf_matrix = engine.fit_transform(all_docs)
 
     # Compute similarities
-    job_vector = document_vectors[0:1]  # First document is job description
-    resume_vectors = document_vectors[1:]  # Rest are resumes
+    job_vector = tfidf_matrix[0:1]  # First document is job description
+    resume_vectors = tfidf_matrix[1:]  # Rest are resumes
 
     similarities = engine.compute_similarity(job_vector, resume_vectors)
 
